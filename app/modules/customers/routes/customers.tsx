@@ -1,11 +1,11 @@
 import type { Route } from "./+types/customers";
-import { DataTable } from "~/components/customers/data-table";
-import { columns } from "~/lib/customers/columns";
-import { fakeCustomers } from "~/lib/customers/data";
+import { DataTable } from "../ui/data-table";
+import { columns } from "../ui/columns";
+import { fakeCustomers } from "../ui/data";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Customers | LeadTech CRM" },
+    { title: "Customers | LeadtechCRM" },
     { name: "description", content: "Manage your customers" },
   ];
 }
