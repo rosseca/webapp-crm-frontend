@@ -1,0 +1,155 @@
+steps:
+  # Step 0: Create Terraform state bucket if it doesn't exist
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: Create State Bucket
+    entrypoint: bash
+    args:
+      - '-c'
+      - |
+        BUCKET_NAME="${PROJECT_ID}-tf-state"
+        echo "Using bucket: gs://$${BUCKET_NAME}"
+
+        # Check if bucket exists and is accessible
+        if gcloud storage buckets describe gs://$${BUCKET_NAME} > /dev/null 2>&1; then
+          echo "Bucket gs://$${BUCKET_NAME} already exists and is accessible"
+        else
+          echo "Creating bucket gs://$${BUCKET_NAME}..."
+          gcloud storage buckets create gs://$${BUCKET_NAME} \
+            --location=${_REGION} \
+            --uniform-bucket-level-access
+        fi
+
+        # Grant Cloud Build service account access to the bucket
+        PROJECT_NUMBER=$$(gcloud projects describe ${PROJECT_ID} --format='value(projectNumber)')
+        CB_SA="$${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com"
+        COMPUTE_SA="$${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+
+        echo "Granting Storage Admin to Cloud Build SA: $${CB_SA}"
+        gcloud storage buckets add-iam-policy-binding gs://$${BUCKET_NAME} \
+          --member="serviceAccount:$${CB_SA}" \
+          --role="roles/storage.admin" || true
+
+        echo "Granting Storage Admin to Compute SA: $${COMPUTE_SA}"
+        gcloud storage buckets add-iam-policy-binding gs://$${BUCKET_NAME} \
+          --member="serviceAccount:$${COMPUTE_SA}" \
+          --role="roles/storage.admin" || true
+
+        # Write project number to file for later steps
+        echo "$${PROJECT_NUMBER}" > /workspace/.project_number
+
+  # Step 1: Build Terraform Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: Build Terraform Image
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/${PROJECT_ID}/terraform:latest'
+      - '-f'
+      - 'terraform/Dockerfile'
+      - 'terraform'
+    waitFor:
+      - Create State Bucket
+
+  # Step 2: Push Terraform image to GCR
+  - name: 'gcr.io/cloud-builders/docker'
+    id: Push Terraform Image
+    args:
+      - 'push'
+      - 'gcr.io/${PROJECT_ID}/terraform:latest'
+    waitFor:
+      - Build Terraform Image
+
+  # Step 3: Build App Docker image (using GCR instead of Artifact Registry)
+  - name: 'gcr.io/cloud-builders/docker'
+    id: Build Docker Image
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:${SHORT_SHA}'
+      - '-t'
+      - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}:latest'
+      - '.'
+    dir: .
+    waitFor:
+      - Create State Bucket
+
+  # Step 4: Push Docker image to Google Container Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: Push Docker Image
+    args:
+      - 'push'
+      - '--all-tags'
+      - 'gcr.io/${PROJECT_ID}/${_SERVICE_NAME}'
+    waitFor:
+      - Build Docker Image
+
+  # Step 5: Deploy to Cloud Run via Terraform
+  - name: gcr.io/${PROJECT_ID}/terraform
+    id: Deploy Cloud Run
+    entrypoint: 'bash'
+    env:
+      - _CHAT_WEBHOOK_URL=${_CHAT_WEBHOOK_URL}
+      - _ENVIRONMENT=${_ENVIRONMENT}
+      - _SERVICE_NAME=${_SERVICE_NAME}
+      - _ARTIFACT_REPO=${_ARTIFACT_REPO}
+      - _REGION=${_REGION}
+      - REPO_NAME=${REPO_NAME}
+      - REPO_FULL_NAME=${REPO_FULL_NAME}
+      - BUILD_ID=${BUILD_ID}
+      - PROJECT_ID=${PROJECT_ID}
+      - BRANCH_NAME=${BRANCH_NAME}
+      - SHORT_SHA=${SHORT_SHA}
+      - LOCATION=${LOCATION}
+    args:
+      - '-c'
+      - |
+        source /workspace/terraform/scripts/utils.sh
+
+        # Read project number from file written by Step 0
+        PROJECT_NUM=$$(cat /workspace/.project_number)
+
+        cd environments/${_ENVIRONMENT}
+        run_or_fail terraform init -upgrade \
+          -backend-config="bucket=${PROJECT_ID}-tf-state"
+        run_or_fail terraform apply -auto-approve \
+          -var="project_id=${PROJECT_ID}" \
+          -var="project_number=$${PROJECT_NUM}" \
+          -var="image_tag=${SHORT_SHA}"
+    dir: terraform
+    waitFor:
+      - Push Docker Image
+      - Push Terraform Image
+
+  # Step 6: Notify result on Google Chat
+  - name: 'gcr.io/cloud-builders/curl'
+    id: Notify result on GoogleChat
+    entrypoint: bash
+    env:
+      - _CHAT_WEBHOOK_URL=${_CHAT_WEBHOOK_URL}
+      - _ENVIRONMENT=${_ENVIRONMENT}
+      - REPO_NAME=${REPO_NAME}
+      - REPO_FULL_NAME=${REPO_FULL_NAME}
+      - BUILD_ID=${BUILD_ID}
+      - PROJECT_ID=${PROJECT_ID}
+      - BRANCH_NAME=${BRANCH_NAME}
+      - SHORT_SHA=${SHORT_SHA}
+      - LOCATION=${LOCATION}
+    waitFor:
+      - Deploy Cloud Run
+    args:
+      - -c
+      - |
+        source /workspace/terraform/scripts/utils.sh
+
+        notify_google_chat "SUCCESS"
+
+# Substitution variables (can be overridden in trigger configuration)
+substitutions:
+  _ENVIRONMENT: staging
+  _SERVICE_NAME: leadtech-crm
+  _ARTIFACT_REPO: leadtech-crm
+  _REGION: europe-west1
+
+# Use Cloud Logging to store the logs from the execution
+options:
+  logging: CLOUD_LOGGING_ONLY
