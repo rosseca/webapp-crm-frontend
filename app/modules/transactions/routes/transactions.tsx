@@ -1,8 +1,10 @@
+import { useState, useCallback } from "react";
 import type { Route } from "./+types/transactions";
 import { TransactionDataTable } from "../ui/data-table";
 import { columns } from "../ui/columns";
 import { useTransactions } from "../hooks/use-transactions";
 import type { Transaction } from "../ui/schema";
+import type { TransactionsListParams } from "~/lib/api";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -11,10 +13,31 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
+const PAGE_SIZE = 20;
+
 export default function Transactions() {
-  const { data, isLoading, error } = useTransactions({ limit: 100 });
+  const [params, setParams] = useState<TransactionsListParams>({
+    page: 1,
+    limit: PAGE_SIZE,
+  });
+
+  const { data, isLoading, error } = useTransactions(params);
 
   const transactions: Transaction[] = data?.data ?? [];
+  const pagination = {
+    page: data?.page ?? 1,
+    limit: data?.limit ?? PAGE_SIZE,
+    total: data?.total ?? 0,
+    totalPages: data?.totalPages ?? 1,
+  };
+
+  const handlePageChange = useCallback((page: number) => {
+    setParams((prev) => ({ ...prev, page }));
+  }, []);
+
+  const handleFiltersChange = useCallback((filters: Partial<TransactionsListParams>) => {
+    setParams((prev) => ({ ...prev, ...filters, page: 1 }));
+  }, []);
 
   return (
     <div className="container mx-auto py-10">
@@ -33,6 +56,9 @@ export default function Transactions() {
         columns={columns}
         data={transactions}
         isLoading={isLoading}
+        pagination={pagination}
+        onPageChange={handlePageChange}
+        onFiltersChange={handleFiltersChange}
       />
     </div>
   );

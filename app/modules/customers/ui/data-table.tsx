@@ -1,11 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   type ColumnDef,
-  type ColumnFiltersState,
   flexRender,
   getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
 import {
@@ -25,11 +22,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import type { CustomersListParams } from "~/lib/api";
+
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   isLoading?: boolean;
+  pagination: PaginationInfo;
+  onPageChange: (page: number) => void;
+  onFiltersChange: (filters: Partial<CustomersListParams>) => void;
 }
 
 const loginMethods = ["all", "Google", "Facebook", "Apple", "Email"];
@@ -39,48 +47,65 @@ export function DataTable<TData, TValue>({
   columns,
   data,
   isLoading = false,
+  pagination,
+  onPageChange,
+  onFiltersChange,
 }: DataTableProps<TData, TValue>) {
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [globalFilter, setGlobalFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [loginWith, setLoginWith] = useState("all");
+  const [emailVerified, setEmailVerified] = useState("all");
+
+  // Debounce search input
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      onFiltersChange({ search: search || undefined });
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [search, onFiltersChange]);
+
+  const handleLoginWithChange = (value: string) => {
+    setLoginWith(value);
+    onFiltersChange({ loginWith: value === "all" ? undefined : value });
+  };
+
+  const handleEmailVerifiedChange = (value: string) => {
+    setEmailVerified(value);
+    onFiltersChange({
+      email_verified: value === "all" ? undefined : value === "true",
+    });
+  };
+
+  const handleClearFilters = () => {
+    setSearch("");
+    setLoginWith("all");
+    setEmailVerified("all");
+    onFiltersChange({
+      search: undefined,
+      loginWith: undefined,
+      email_verified: undefined,
+    });
+  };
+
+  const hasFilters = search || loginWith !== "all" || emailVerified !== "all";
 
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    onColumnFiltersChange: setColumnFilters,
-    onGlobalFilterChange: setGlobalFilter,
-    state: {
-      columnFilters,
-      globalFilter,
-    },
-    initialState: {
-      pagination: {
-        pageSize: 10,
-      },
-    },
+    manualPagination: true,
+    pageCount: pagination.totalPages,
   });
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-4">
         <Input
-          placeholder="Search all columns..."
-          value={globalFilter ?? ""}
-          onChange={(event) => setGlobalFilter(event.target.value)}
+          placeholder="Search by name, email, or company..."
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
           className="max-w-sm"
         />
-        <Select
-          value={
-            (table.getColumn("loginWith")?.getFilterValue() as string) ?? "all"
-          }
-          onValueChange={(value) =>
-            table
-              .getColumn("loginWith")
-              ?.setFilterValue(value === "all" ? undefined : value)
-          }
-        >
+        <Select value={loginWith} onValueChange={handleLoginWithChange}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Login Method" />
           </SelectTrigger>
@@ -92,17 +117,7 @@ export function DataTable<TData, TValue>({
             ))}
           </SelectContent>
         </Select>
-        <Select
-          value={
-            (table.getColumn("email_verified")?.getFilterValue() as string) ??
-            "all"
-          }
-          onValueChange={(value) =>
-            table
-              .getColumn("email_verified")
-              ?.setFilterValue(value === "all" ? undefined : value)
-          }
-        >
+        <Select value={emailVerified} onValueChange={handleEmailVerifiedChange}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Verified" />
           </SelectTrigger>
@@ -118,14 +133,8 @@ export function DataTable<TData, TValue>({
             ))}
           </SelectContent>
         </Select>
-        {(globalFilter || columnFilters.length > 0) && (
-          <Button
-            variant="outline"
-            onClick={() => {
-              setGlobalFilter("");
-              setColumnFilters([]);
-            }}
-          >
+        {hasFilters && (
+          <Button variant="outline" onClick={handleClearFilters}>
             Clear Filters
           </Button>
         )}
@@ -189,27 +198,25 @@ export function DataTable<TData, TValue>({
       </div>
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Showing {table.getRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s)
+          Showing {data.length} of {pagination.total} customers
         </div>
         <div className="flex items-center space-x-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => onPageChange(pagination.page - 1)}
+            disabled={pagination.page <= 1 || isLoading}
           >
             Previous
           </Button>
           <div className="text-sm text-muted-foreground">
-            Page {table.getState().pagination.pageIndex + 1} of{" "}
-            {table.getPageCount()}
+            Page {pagination.page} of {pagination.totalPages}
           </div>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
+            onClick={() => onPageChange(pagination.page + 1)}
+            disabled={pagination.page >= pagination.totalPages || isLoading}
           >
             Next
           </Button>

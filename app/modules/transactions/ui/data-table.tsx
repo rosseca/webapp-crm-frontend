@@ -1,11 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   type ColumnDef,
-  type ColumnFiltersState,
   flexRender,
   getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
   useReactTable,
 } from "@tanstack/react-table";
 import {
@@ -25,11 +22,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import type { TransactionsListParams } from "~/lib/api";
+
+interface PaginationInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   isLoading?: boolean;
+  pagination: PaginationInfo;
+  onPageChange: (page: number) => void;
+  onFiltersChange: (filters: Partial<TransactionsListParams>) => void;
 }
 
 const transactionStatuses = [
@@ -56,49 +64,107 @@ export function TransactionDataTable<TData, TValue>({
   columns,
   data,
   isLoading = false,
+  pagination,
+  onPageChange,
+  onFiltersChange,
 }: DataTableProps<TData, TValue>) {
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
-  const [globalFilter, setGlobalFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [transactionStatus, setTransactionStatus] = useState("all");
+  const [transactionType, setTransactionType] = useState("all");
+  const [paymentType, setPaymentType] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+
+  // Debounce search input
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      onFiltersChange({ search: search || undefined });
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [search, onFiltersChange]);
+
+  const handleTransactionStatusChange = (value: string) => {
+    setTransactionStatus(value);
+    onFiltersChange({
+      transaction_status: value === "all" ? undefined : value,
+    });
+  };
+
+  const handleTransactionTypeChange = (value: string) => {
+    setTransactionType(value);
+    onFiltersChange({
+      transaction_type: value === "all" ? undefined : value,
+    });
+  };
+
+  const handlePaymentTypeChange = (value: string) => {
+    setPaymentType(value);
+    onFiltersChange({
+      payment_type: value === "all" ? undefined : value,
+    });
+  };
+
+  const handleDateFromChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setDateFrom(value);
+    onFiltersChange({
+      date_from: value || undefined,
+    });
+  };
+
+  const handleDateToChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setDateTo(value);
+    onFiltersChange({
+      date_to: value || undefined,
+    });
+  };
+
+  const handleClearFilters = () => {
+    setSearch("");
+    setTransactionStatus("all");
+    setTransactionType("all");
+    setPaymentType("all");
+    setDateFrom("");
+    setDateTo("");
+    onFiltersChange({
+      search: undefined,
+      transaction_status: undefined,
+      transaction_type: undefined,
+      payment_type: undefined,
+      date_from: undefined,
+      date_to: undefined,
+    });
+  };
+
+  const hasFilters =
+    search ||
+    transactionStatus !== "all" ||
+    transactionType !== "all" ||
+    paymentType !== "all" ||
+    dateFrom ||
+    dateTo;
 
   const table = useReactTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    onColumnFiltersChange: setColumnFilters,
-    onGlobalFilterChange: setGlobalFilter,
-    state: {
-      columnFilters,
-      globalFilter,
-    },
-    initialState: {
-      pagination: {
-        pageSize: 10,
-      },
-    },
+    manualPagination: true,
+    pageCount: pagination.totalPages,
   });
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-4">
         <Input
-          placeholder="Search transactions..."
-          value={globalFilter ?? ""}
-          onChange={(event) => setGlobalFilter(event.target.value)}
+          placeholder="Search by ID, customer, subscription..."
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
           className="max-w-sm"
         />
         <Select
-          value={
-            (table
-              .getColumn("transaction_status")
-              ?.getFilterValue() as string) ?? "all"
-          }
-          onValueChange={(value) =>
-            table
-              .getColumn("transaction_status")
-              ?.setFilterValue(value === "all" ? undefined : value)
-          }
+          value={transactionStatus}
+          onValueChange={handleTransactionStatusChange}
         >
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Status" />
@@ -113,15 +179,8 @@ export function TransactionDataTable<TData, TValue>({
           </SelectContent>
         </Select>
         <Select
-          value={
-            (table.getColumn("transaction_type")?.getFilterValue() as string) ??
-            "all"
-          }
-          onValueChange={(value) =>
-            table
-              .getColumn("transaction_type")
-              ?.setFilterValue(value === "all" ? undefined : value)
-          }
+          value={transactionType}
+          onValueChange={handleTransactionTypeChange}
         >
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Type" />
@@ -136,17 +195,7 @@ export function TransactionDataTable<TData, TValue>({
             ))}
           </SelectContent>
         </Select>
-        <Select
-          value={
-            (table.getColumn("payment_type")?.getFilterValue() as string) ??
-            "all"
-          }
-          onValueChange={(value) =>
-            table
-              .getColumn("payment_type")
-              ?.setFilterValue(value === "all" ? undefined : value)
-          }
-        >
+        <Select value={paymentType} onValueChange={handlePaymentTypeChange}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Payment Type" />
           </SelectTrigger>
@@ -160,14 +209,28 @@ export function TransactionDataTable<TData, TValue>({
             ))}
           </SelectContent>
         </Select>
-        {(globalFilter || columnFilters.length > 0) && (
-          <Button
-            variant="outline"
-            onClick={() => {
-              setGlobalFilter("");
-              setColumnFilters([]);
-            }}
-          >
+      </div>
+      <div className="flex flex-wrap items-center gap-4">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">From:</span>
+          <Input
+            type="date"
+            value={dateFrom}
+            onChange={handleDateFromChange}
+            className="w-[160px]"
+          />
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">To:</span>
+          <Input
+            type="date"
+            value={dateTo}
+            onChange={handleDateToChange}
+            className="w-[160px]"
+          />
+        </div>
+        {hasFilters && (
+          <Button variant="outline" onClick={handleClearFilters}>
             Clear Filters
           </Button>
         )}
@@ -231,27 +294,25 @@ export function TransactionDataTable<TData, TValue>({
       </div>
       <div className="flex items-center justify-between">
         <div className="text-sm text-muted-foreground">
-          Showing {table.getRowModel().rows.length} of{" "}
-          {table.getFilteredRowModel().rows.length} row(s)
+          Showing {data.length} of {pagination.total} transactions
         </div>
         <div className="flex items-center space-x-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => onPageChange(pagination.page - 1)}
+            disabled={pagination.page <= 1 || isLoading}
           >
             Previous
           </Button>
           <div className="text-sm text-muted-foreground">
-            Page {table.getState().pagination.pageIndex + 1} of{" "}
-            {table.getPageCount()}
+            Page {pagination.page} of {pagination.totalPages}
           </div>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
+            onClick={() => onPageChange(pagination.page + 1)}
+            disabled={pagination.page >= pagination.totalPages || isLoading}
           >
             Next
           </Button>

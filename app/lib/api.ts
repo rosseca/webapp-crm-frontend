@@ -112,6 +112,7 @@ export interface PaginatedResponse<T> {
   data: T[];
   total: number;
   page: number;
+  limit: number;
   totalPages: number;
 }
 
@@ -166,11 +167,14 @@ export interface Transaction {
 export interface TransactionsListParams {
   page?: number;
   limit?: number;
+  search?: string;
   customer_id?: string;
   subscription_id?: string;
   transaction_type?: string;
   transaction_status?: string;
+  payment_type?: string;
   currency?: string;
+  is_test?: string;
   date_from?: string;
   date_to?: string;
   sortBy?: string;
@@ -182,11 +186,14 @@ export const transactionsApi = {
     const searchParams = new URLSearchParams();
     if (params.page) searchParams.append("page", params.page.toString());
     if (params.limit) searchParams.append("limit", params.limit.toString());
+    if (params.search) searchParams.append("search", params.search);
     if (params.customer_id) searchParams.append("customer_id", params.customer_id);
     if (params.subscription_id) searchParams.append("subscription_id", params.subscription_id);
     if (params.transaction_type) searchParams.append("transaction_type", params.transaction_type);
     if (params.transaction_status) searchParams.append("transaction_status", params.transaction_status);
+    if (params.payment_type) searchParams.append("payment_type", params.payment_type);
     if (params.currency) searchParams.append("currency", params.currency);
+    if (params.is_test) searchParams.append("is_test", params.is_test);
     if (params.date_from) searchParams.append("date_from", params.date_from);
     if (params.date_to) searchParams.append("date_to", params.date_to);
     if (params.sortBy) searchParams.append("sortBy", params.sortBy);

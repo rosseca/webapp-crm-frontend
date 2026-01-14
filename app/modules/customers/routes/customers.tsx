@@ -1,8 +1,10 @@
+import { useState, useCallback } from "react";
 import type { Route } from "./+types/customers";
 import { DataTable } from "../ui/data-table";
 import { columns } from "../ui/columns";
 import { useCustomers } from "../hooks/use-customers";
 import type { Customer } from "../ui/schema";
+import type { CustomersListParams } from "~/lib/api";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -11,10 +13,31 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
+const PAGE_SIZE = 20;
+
 export default function Customers() {
-  const { data, isLoading, error } = useCustomers({ limit: 100 });
+  const [params, setParams] = useState<CustomersListParams>({
+    page: 1,
+    limit: PAGE_SIZE,
+  });
+
+  const { data, isLoading, error } = useCustomers(params);
 
   const customers: Customer[] = data?.data ?? [];
+  const pagination = {
+    page: data?.page ?? 1,
+    limit: data?.limit ?? PAGE_SIZE,
+    total: data?.total ?? 0,
+    totalPages: data?.totalPages ?? 1,
+  };
+
+  const handlePageChange = useCallback((page: number) => {
+    setParams((prev) => ({ ...prev, page }));
+  }, []);
+
+  const handleFiltersChange = useCallback((filters: Partial<CustomersListParams>) => {
+    setParams((prev) => ({ ...prev, ...filters, page: 1 }));
+  }, []);
 
   return (
     <div className="container mx-auto py-10">
@@ -29,7 +52,14 @@ export default function Customers() {
           Error loading customers: {error.message}
         </div>
       )}
-      <DataTable columns={columns} data={customers} isLoading={isLoading} />
+      <DataTable
+        columns={columns}
+        data={customers}
+        isLoading={isLoading}
+        pagination={pagination}
+        onPageChange={handlePageChange}
+        onFiltersChange={handleFiltersChange}
+      />
     </div>
   );
 }
