@@ -51,13 +51,14 @@ resource "google_cloud_run_v2_service" "crm_frontend" {
         }
       }
 
-      # Environment variables
-      dynamic "env" {
-        for_each = var.env_vars
-        content {
-          name  = env.key
-          value = env.value
-        }
+      # Environment variables (from Cloud Build substitutions)
+      env {
+        name  = "NODE_ENV"
+        value = var.environment
+      }
+      env {
+        name  = "VITE_API_URL"
+        value = var.vite_api_url
       }
 
       # Environment variables from secrets

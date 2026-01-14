@@ -114,7 +114,8 @@ steps:
         run_or_fail terraform apply -auto-approve \
           -var="project_id=${PROJECT_ID}" \
           -var="project_number=$${PROJECT_NUM}" \
-          -var="image_tag=${SHORT_SHA}"
+          -var="image_tag=${SHORT_SHA}" \
+          -var="vite_api_url=${_VITE_API_URL}"
     dir: terraform
     waitFor:
       - Push Docker Image
@@ -149,6 +150,8 @@ substitutions:
   _SERVICE_NAME: leadtech-crm
   _ARTIFACT_REPO: leadtech-crm
   _REGION: europe-west1
+  # Environment variables for Cloud Run
+  _VITE_API_URL: ""
 
 # Use Cloud Logging to store the logs from the execution
 options:

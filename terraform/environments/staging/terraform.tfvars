@@ -18,11 +18,8 @@ max_instances = 10
 # Access Configuration
 allow_unauthenticated = true
 
-# Environment Variables (PORT is reserved by Cloud Run, don't set it here)
-env_vars = {
-  NODE_ENV     = "staging"
-  VITE_API_URL = "https://leadtech-crm-backend-ew.a.run.app"
-}
+# Environment Variables are passed from Cloud Build substitutions:
+# - _VITE_API_URL (CRM Backend URL)
 
 # Secret Environment Variables (from Secret Manager)
 # Uncomment and configure as needed:

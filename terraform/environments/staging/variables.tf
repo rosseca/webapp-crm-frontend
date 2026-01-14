@@ -70,11 +70,10 @@ variable "allow_unauthenticated" {
   default     = true
 }
 
-# Environment Variables
-variable "env_vars" {
-  description = "Environment variables for the Cloud Run service"
-  type        = map(string)
-  default     = {}
+# Environment Variables (passed from Cloud Build substitutions)
+variable "vite_api_url" {
+  description = "CRM Backend API URL"
+  type        = string
 }
 
 variable "secret_env_vars" {
