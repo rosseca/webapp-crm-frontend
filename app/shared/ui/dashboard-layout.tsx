@@ -16,7 +16,7 @@ export default function DashboardLayout() {
       <AppSidebar />
       <SidebarInset>
         <Header />
-        <main className="flex-1 px-4 py-1 overflow-auto">
+        <main className="flex-1 mx-2 py-1 overflow-auto">
           <Outlet />
         </main>
       </SidebarInset>

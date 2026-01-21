@@ -12,8 +12,10 @@ export interface User {
 interface AuthState {
   user: User | null;
   token: string | null;
+  refreshToken: string | null;
   isAuthenticated: boolean;
-  setAuth: (user: User, token: string) => void;
+  setAuth: (user: User, token: string, refreshToken?: string) => void;
+  updateTokens: (token: string, refreshToken: string) => void;
   logout: () => void;
 }
 
@@ -22,27 +24,43 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       token: null,
+      refreshToken: null,
       isAuthenticated: false,
-      setAuth: (user: User, token: string) => {
+      setAuth: (user: User, token: string, refreshToken?: string) => {
         api.setToken(token);
+        api.setRefreshToken(refreshToken || null);
         set({
           user,
           token,
+          refreshToken: refreshToken || null,
           isAuthenticated: true,
         });
       },
+      updateTokens: (token: string, refreshToken: string) => {
+        api.setToken(token);
+        api.setRefreshToken(refreshToken);
+        set({ token, refreshToken });
+      },
       logout: () => {
         api.setToken(null);
-        set({ user: null, token: null, isAuthenticated: false });
+        api.setRefreshToken(null);
+        set({ user: null, token: null, refreshToken: null, isAuthenticated: false });
       },
     }),
     {
       name: "auth-storage",
       onRehydrateStorage: () => (state) => {
-        // Restore token to API client after rehydration
+        // Restore tokens to API client after rehydration
         if (state?.token) {
           api.setToken(state.token);
         }
+        if (state?.refreshToken) {
+          api.setRefreshToken(state.refreshToken);
+        }
+        // Set up callback for token refresh
+        api.setOnTokenRefreshed((newToken, newRefreshToken) => {
+          useAuthStore.getState().updateTokens(newToken, newRefreshToken);
+        });
       },
     }
   )

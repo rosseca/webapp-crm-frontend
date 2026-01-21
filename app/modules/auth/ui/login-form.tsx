@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, Link } from "react-router";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -9,6 +9,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "~/components/ui/card";
 import { useAuthStore } from "../store/auth-store";
 import { authApi } from "~/lib/api";
@@ -28,7 +29,7 @@ export function LoginForm() {
 
     try {
       const response = await authApi.login({ email, password });
-      setAuth(response.user, response.accessToken);
+      setAuth(response.user, response.accessToken, response.refreshToken);
       navigate("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
@@ -83,6 +84,14 @@ export function LoginForm() {
           </Button>
         </form>
       </CardContent>
+      <CardFooter className="flex justify-center">
+        <p className="text-sm text-muted-foreground">
+          Don't have an account?{" "}
+          <Link to="/signup" className="text-primary hover:underline">
+            Sign up
+          </Link>
+        </p>
+      </CardFooter>
     </Card>
   );
 }

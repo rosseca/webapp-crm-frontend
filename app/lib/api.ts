@@ -8,13 +8,28 @@ function getApiUrl(): string {
   return window.ENV?.API_URL || "http://localhost:3000";
 }
 
-interface ApiError {
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public statusCode: number,
+    public isAuthError: boolean = false
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+interface ApiErrorResponse {
   message: string;
   statusCode: number;
 }
 
 class ApiClient {
   private token: string | null = null;
+  private refreshToken: string | null = null;
+  private isRefreshing = false;
+  private refreshPromise: Promise<boolean> | null = null;
+  private onTokenRefreshed: ((token: string, refreshToken: string) => void) | null = null;
 
   // Resolve baseUrl lazily to ensure window.ENV is available on client
   private get baseUrl(): string {
@@ -29,9 +44,73 @@ class ApiClient {
     return this.token;
   }
 
+  setRefreshToken(refreshToken: string | null) {
+    this.refreshToken = refreshToken;
+  }
+
+  getRefreshToken(): string | null {
+    return this.refreshToken;
+  }
+
+  setOnTokenRefreshed(callback: ((token: string, refreshToken: string) => void) | null) {
+    this.onTokenRefreshed = callback;
+  }
+
+  private async attemptRefresh(): Promise<boolean> {
+    if (!this.refreshToken) {
+      return false;
+    }
+
+    // If already refreshing, wait for that promise
+    if (this.isRefreshing && this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    this.isRefreshing = true;
+    this.refreshPromise = this.doRefresh();
+
+    try {
+      return await this.refreshPromise;
+    } finally {
+      this.isRefreshing = false;
+      this.refreshPromise = null;
+    }
+  }
+
+  private async doRefresh(): Promise<boolean> {
+    try {
+      const url = `${this.baseUrl}/auth/refresh`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken: this.refreshToken }),
+      });
+
+      if (!response.ok) {
+        return false;
+      }
+
+      const data = await response.json();
+      this.token = data.accessToken;
+      if (data.refreshToken) {
+        this.refreshToken = data.refreshToken;
+      }
+
+      // Notify the auth store about the new tokens
+      if (this.onTokenRefreshed && this.token) {
+        this.onTokenRefreshed(this.token, this.refreshToken || "");
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    isRetry = false
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
     const headers: Record<string, string> = {
@@ -49,11 +128,31 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      const error: ApiError = await response.json().catch(() => ({
+      // Handle 401 Unauthorized
+      if (response.status === 401 && !isRetry && !endpoint.includes("/auth/")) {
+        const refreshed = await this.attemptRefresh();
+        if (refreshed) {
+          // Retry the original request with new token
+          return this.request<T>(endpoint, options, true);
+        }
+        // Refresh failed - throw auth error
+        throw new ApiError(
+          "Your session has expired. Please try again or re-login.",
+          401,
+          true
+        );
+      }
+
+      const error: ApiErrorResponse = await response.json().catch(() => ({
         message: response.statusText,
         statusCode: response.status,
       }));
-      throw new Error(error.message || `HTTP Error: ${response.status}`);
+
+      throw new ApiError(
+        error.message || `HTTP Error: ${response.status}`,
+        response.status,
+        response.status === 401
+      );
     }
 
     if (response.status === 204) {
@@ -83,8 +182,17 @@ export interface LoginRequest {
   password: string;
 }
 
-export interface LoginResponse {
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  firstName: string;
+  lastName?: string;
+}
+
+export interface AuthResponse {
   accessToken: string;
+  refreshToken: string;
+  expiresIn: number;
   user: {
     id: string;
     email: string;
@@ -93,9 +201,18 @@ export interface LoginResponse {
   };
 }
 
+// Alias for backwards compatibility
+export type LoginResponse = AuthResponse;
+
 export const authApi = {
-  login: (data: LoginRequest) => api.post<LoginResponse>("/auth/login", data),
+  login: (data: LoginRequest) => api.post<AuthResponse>("/auth/login", data),
+  register: (data: RegisterRequest) => api.post<AuthResponse>("/auth/register", data),
   logout: () => api.post<void>("/auth/logout"),
+  refreshToken: (refreshToken: string) =>
+    api.post<{ accessToken: string; refreshToken?: string; expiresIn: number }>(
+      "/auth/refresh",
+      { refreshToken }
+    ),
 };
 
 // Users/Customers API

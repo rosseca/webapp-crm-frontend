@@ -1,9 +1,8 @@
 import { Link, useLocation } from "react-router";
-import { Users, CreditCard, PanelLeftClose, PanelLeft, LayoutDashboard } from "lucide-react";
+import { Users, CreditCard, LayoutDashboard } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
@@ -12,7 +11,6 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "~/components/ui/sidebar";
-import { Button } from "~/components/ui/button";
 
 const menuItems = [
   {
@@ -34,16 +32,24 @@ const menuItems = [
 
 export function AppSidebar() {
   const location = useLocation();
-  const { state, toggleSidebar } = useSidebar();
+  const { setOpen, setOpenMobile, isMobile } = useSidebar();
+
+  const handleItemClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    } else {
+      setOpen(false);
+    }
+  };
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="offcanvas">
       <SidebarHeader className="border-b">
         <div className="flex items-center gap-2 px-2 py-2">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
             L
           </div>
-          <span className="font-semibold text-lg group-data-[collapsible=icon]:hidden">
+          <span className="font-semibold text-lg">
             LeadtechCRM
           </span>
         </div>
@@ -58,6 +64,7 @@ export function AppSidebar() {
                     asChild
                     isActive={location.pathname === item.url}
                     tooltip={item.title}
+                    onClick={handleItemClick}
                   >
                     <Link to={item.url}>
                       <item.icon />
@@ -70,27 +77,6 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start gap-2"
-          onClick={toggleSidebar}
-        >
-          {state === "expanded" ? (
-            <>
-              <PanelLeftClose className="h-4 w-4" />
-              <span className="group-data-[collapsible=icon]:hidden">
-                Collapse
-              </span>
-            </>
-          ) : (
-            <>
-              <PanelLeft className="h-4 w-4" />
-            </>
-          )}
-        </Button>
-      </SidebarFooter>
     </Sidebar>
   );
 }

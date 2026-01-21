@@ -5,6 +5,7 @@ import { columns } from "../ui/columns";
 import { useCustomers } from "../hooks/use-customers";
 import type { Customer } from "../ui/schema";
 import type { CustomersListParams } from "~/lib/api";
+import { ApiErrorAlert } from "~/components/ui/api-error-alert";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -21,7 +22,7 @@ export default function Customers() {
     limit: PAGE_SIZE,
   });
 
-  const { data, isLoading, error } = useCustomers(params);
+  const { data, isLoading, error, refetch } = useCustomers(params);
 
   const customers: Customer[] = data?.data ?? [];
   const pagination = {
@@ -39,19 +40,19 @@ export default function Customers() {
     setParams((prev) => ({ ...prev, ...filters, page: 1 }));
   }, []);
 
+  const handleRetry = useCallback(() => {
+    refetch();
+  }, [refetch]);
+
   return (
-    <div className="container mx-auto py-10">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Customers</h1>
-        <p className="text-muted-foreground mt-2">
+    <div className="py-4">
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold tracking-tight">Customers</h1>
+        <p className="text-muted-foreground text-sm mt-1">
           Manage and view all your customers in one place.
         </p>
       </div>
-      {error && (
-        <div className="p-4 mb-4 text-sm text-red-500 bg-red-50 border border-red-200 rounded-md">
-          Error loading customers: {error.message}
-        </div>
-      )}
+      <ApiErrorAlert error={error} onRetry={handleRetry} />
       <DataTable
         columns={columns}
         data={customers}

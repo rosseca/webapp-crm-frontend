@@ -35,11 +35,9 @@ export function Header() {
     : "U";
 
   return (
-    <header className="sticky top-0 z-50 flex h-[65px] items-center gap-4 border-b bg-background px-4">
-      <SidebarTrigger className="md:hidden" />
-      <div className="flex-1">
-        <span className="font-semibold text-lg md:hidden">LeadtechCRM</span>
-      </div>
+    <header className="sticky top-0 z-50 flex h-[65px] items-center gap-4 border-b bg-background px-2">
+      <SidebarTrigger />
+      <div className="flex-1" />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" className="relative h-8 w-8 rounded-full">

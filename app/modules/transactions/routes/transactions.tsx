@@ -5,6 +5,7 @@ import { columns } from "../ui/columns";
 import { useTransactions } from "../hooks/use-transactions";
 import type { Transaction } from "../ui/schema";
 import type { TransactionsListParams } from "~/lib/api";
+import { ApiErrorAlert } from "~/components/ui/api-error-alert";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -21,7 +22,7 @@ export default function Transactions() {
     limit: PAGE_SIZE,
   });
 
-  const { data, isLoading, error } = useTransactions(params);
+  const { data, isLoading, error, refetch } = useTransactions(params);
 
   const transactions: Transaction[] = data?.data ?? [];
   const pagination = {
@@ -39,19 +40,19 @@ export default function Transactions() {
     setParams((prev) => ({ ...prev, ...filters, page: 1 }));
   }, []);
 
+  const handleRetry = useCallback(() => {
+    refetch();
+  }, [refetch]);
+
   return (
-    <div className="container mx-auto py-10">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Transactions</h1>
-        <p className="text-muted-foreground mt-2">
+    <div className="py-4">
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold tracking-tight">Transactions</h1>
+        <p className="text-muted-foreground text-sm mt-1">
           View and manage all your transactions in one place.
         </p>
       </div>
-      {error && (
-        <div className="p-4 mb-4 text-sm text-red-500 bg-red-50 border border-red-200 rounded-md">
-          Error loading transactions: {error.message}
-        </div>
-      )}
+      <ApiErrorAlert error={error} onRetry={handleRetry} />
       <TransactionDataTable
         columns={columns}
         data={transactions}
