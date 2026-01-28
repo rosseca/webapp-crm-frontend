@@ -34,7 +34,8 @@ steps:
           --platform managed \
           --service-account cloudrun-runtime-sa@${PROJECT_ID}.iam.gserviceaccount.com \
           --allow-unauthenticated \
-          --set-env-vars VITE_API_URL=https://leadtech-crm-backend-110642273202.europe-west1.run.app,NODE_ENV=dev1
+          --set-env-vars VITE_API_URL=https://crm-backend-859762533649.europe-west2.run.app \
+          --set-env-vars NODE_ENV=dev1
     entrypoint: bash
 
 # Substitution variables (can be overridden in trigger configuration)
